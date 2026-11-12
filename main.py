@@ -4,7 +4,7 @@
 import json
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from statistics import median
 
 INPUT_DIR = os.environ.get("MAKEFUN_INPUT_DIR") or "/input"
@@ -93,7 +93,8 @@ def main():
         (parse_at(b["at"]) - parse_at(a["at"])).total_seconds() / 3600.0
         for a, b in zip(reads, reads[1:])
     ]
-    read_hours = median(gaps) if gaps else 1.0
+    recent_gaps = gaps[-20:]
+    read_hours = median(recent_gaps) if recent_gaps else 1.0
     if read_hours <= 0:
         read_hours = 1.0
 
@@ -108,6 +109,17 @@ def main():
         prev = {g["universe_id"]: g["rank"] for g in reads[-2]["up_and_coming"]}
 
     DEFAULT = (0.5, {k: 0.1 for k in range(1, 11)})
+    created = {}
+    for r in reversed(reads):
+        det = r.get("details")
+        if not det:
+            continue
+        for uid, d in det.items():
+            if uid not in created and isinstance(d, dict) and d.get("created"):
+                created[int(uid)] = parse_at(d["created"])
+    age_limit_days = timedelta(days=28)
+    start_ts = parse_at(reads[-1]["at"])
+
     acc = {}
     for g in last:
         uid = g["universe_id"]
@@ -116,11 +128,15 @@ def main():
         r_eff = round(rank - 0.4 * (pr - rank))
         r_eff = max(1, min(r_eff, max_rank))
         b = band(r_eff)
-        for m, w in weights.items():
-            p_in, dist = tables[min(m, maxm)].get(b, DEFAULT)
+        c = created.get(uid)
+        for h, w in weights.items():
+            p_in, dist = tables[min(h, maxm)].get(b, DEFAULT)
+            age_f = 1.0
+            if c is not None and c + age_limit_days < start_ts + timedelta(hours=h):
+                age_f = 0.02
             for k in range(1, 11):
                 row = acc.setdefault(k, {})
-                row[uid] = row.get(uid, 0.0) + w * p_in * dist[k]
+                row[uid] = row.get(uid, 0.0) + w * p_in * age_f * dist[k]
 
     probabilities = []
     for k in range(1, 11):
