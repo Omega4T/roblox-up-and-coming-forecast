@@ -42,7 +42,7 @@ def load_reads(path):
     return reads
 
 
-def build_tables(reads, maxm):
+def build_tables(reads, maxm, read_hours):
     n = len(reads)
     tables = {}
     for m in range(1, maxm + 1):
@@ -50,6 +50,11 @@ def build_tables(reads, maxm):
         hits = {}
         placed = {}
         for i in range(n - m):
+            step_hours = (
+                parse_at(reads[i + m]["at"]) - parse_at(reads[i]["at"])
+            ).total_seconds() / 3600.0 / m
+            if not (0.5 * read_hours <= step_hours <= 1.5 * read_hours):
+                continue
             cur = reads[i]["up_and_coming"]
             nxt = sorted(reads[i + m]["up_and_coming"], key=lambda g: g["rank"])[:10]
             top_place = {g["universe_id"]: k for k, g in enumerate(nxt, start=1)}
@@ -99,7 +104,7 @@ def main():
         read_hours = 1.0
 
     maxm = max(1, min(n - 1, max(12, round(20.0 / read_hours))))
-    tables = build_tables(reads, maxm)
+    tables = build_tables(reads, maxm, read_hours)
     weights, nmax = horizon_weights(read_hours)
 
     last = sorted(reads[-1]["up_and_coming"], key=lambda g: g["rank"])
