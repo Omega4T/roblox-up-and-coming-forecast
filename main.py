@@ -130,7 +130,12 @@ def main():
         b = band(r_eff)
         c = created.get(uid)
         for h, w in weights.items():
-            p_in, dist = tables[min(h, maxm)].get(b, DEFAULT)
+            if h <= maxm:
+                p_in, dist = tables[h].get(b, DEFAULT)
+            else:
+                p_in_max, dist = tables[maxm].get(b, DEFAULT)
+                p_in = p_in_max ** (h / maxm)
+                p_in = max(0.001, min(0.999, p_in))
             age_f = 1.0
             if c is not None and c + age_limit_days < start_ts + timedelta(hours=h):
                 age_f = 0.02
